@@ -15,9 +15,9 @@ from sklearn.cluster import KMeans
 import plotly.express as px
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="ML Saúde - Streamlit", page_icon="🩺", layout="wide")
+st.set_page_config(page_title="ML Saúde - Streamlit", page_icon="", layout="wide")
 
-st.title("🩺 Machine Learning na Área da Saúde")
+st.title(" Machine Learning na Área da Saúde")
 st.write("""
 Aplicação interativa em **Streamlit** demonstrando **Aprendizagem Supervisionada e Não Supervisionada** 
 em datasets da área da saúde. Você pode usar um dataset embutido (ex.: Câncer de Mama, Diabetes) 
@@ -25,7 +25,7 @@ ou carregar seu próprio CSV.
 """)
 
 
-st.sidebar.header("⚙️ Configurações")
+st.sidebar.header(" Configurações")
 data_source = st.sidebar.radio("Fonte de dados", ["Dataset embutido (sklearn)", "Carregar CSV"])
 
 def load_sklearn_dataset(name: str):
@@ -52,7 +52,7 @@ else:
     uploaded = st.sidebar.file_uploader("Envie um CSV (inclua a coluna alvo, se quiser supervisionado)", type=["csv"])
     if uploaded is not None:
         df = pd.read_csv(uploaded)
-        # Heurística simples: tentar detectar alvo
+        
         candidate_targets = [c for c in df.columns if c.lower() in ["target","label","y","classe","class","diagnosis"]]
         target_col = st.sidebar.selectbox("Coluna alvo (opcional)", ["<nenhuma>"] + list(df.columns), index=(0 if not candidate_targets else (["<nenhuma>"]+list(df.columns)).index(candidate_targets[0])) )
         task_type = "auto"
@@ -73,7 +73,7 @@ else:
 
 non_numeric_cols = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c]) and c != (target_col or "")]
 if non_numeric_cols:
-    st.sidebar.write("🔤 Colunas não numéricas detectadas:", non_numeric_cols)
+    st.sidebar.write(" Colunas não numéricas detectadas:", non_numeric_cols)
     handle_cat = st.sidebar.selectbox("Tratamento de não numéricas", ["Ignorar (remover)", "One-hot encoding (experimental)"], index=0)
     if handle_cat == "Ignorar (remover)":
         df = df.drop(columns=non_numeric_cols)
@@ -85,7 +85,7 @@ constant_cols = [c for c in df.columns if df[c].nunique(dropna=False) <= 1]
 if constant_cols:
     df = df.drop(columns=constant_cols)
 
-st.markdown("### 📦 Visão Geral do Dataset")
+st.markdown("###  Visão Geral do Dataset")
 colA, colB, colC = st.columns(3)
 with colA:
     st.metric("Amostras", df.shape[0])
@@ -98,7 +98,7 @@ with st.expander("👀 Prévia dos dados"):
     st.dataframe(df.head(20), use_container_width=True)
 
 
-tab1, tab2, tab3, tab4 = st.tabs(["🔎 EDA", "🧠 Supervisionado", "🧩 Não Supervisionado", "🧪 Inferência"])
+tab1, tab2, tab3, tab4 = st.tabs([" EDA", " Supervisionado", " Não Supervisionado", " Inferência"])
 
 with tab1:
     st.subheader("Exploração de Dados (EDA)")
@@ -324,7 +324,7 @@ with tab4:
     else:
         st.write("Ajuste os valores das features:")
         user_input = {}
-        for col in X_all.columns[:30]:  # limitar para UI amigável
+        for col in X_all.columns[:30]:  
             val = float(X_all[col].median())
             user_input[col] = st.number_input(col, value=val)
         X_user = pd.DataFrame([user_input])
