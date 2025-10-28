@@ -14,7 +14,7 @@ import plotly.express as px
 
 st.set_page_config(page_title="ML em Saúde — Diabetes (sklearn)", layout="wide")
 
-st.sidebar.title("⚙️ Configurações")
+st.sidebar.title(" Configurações")
 dataset_choice = st.sidebar.selectbox("Selecione o conjunto de dados", ["Diabetes (sklearn)", "Enviar CSV próprio"])
 test_size = st.sidebar.slider("Proporção de dados de teste", 0.1, 0.4, 0.2, 0.05)
 random_state = st.sidebar.number_input("Semente aleatória", min_value=0, value=42, step=1)
@@ -50,19 +50,19 @@ else:
     else:
         X, y, target_name = None, None, None
 
-st.title("🏥 Machine Learning em Saúde — Demonstração Interativa")
+st.title(" Machine Learning em Saúde — Demonstração Interativa")
 st.write("Aplicação interativa para **aprendizado supervisionado (regressão)** e **não supervisionado (agrupamento)** em dados de saúde.")
 
 if X is None or y is None:
     st.info("Envie um CSV no menu lateral ou selecione o conjunto Diabetes para começar.")
     st.stop()
 
-with st.expander("ℹ️ Sobre o conjunto de dados", expanded=True):
+with st.expander(" Sobre o conjunto de dados", expanded=True):
     st.write(ds_desc)
     st.write(f"**Amostras:** {X.shape[0]} — **Atributos:** {X.shape[1]} — **Alvo:** `{target_name}`")
     st.dataframe(X.head())
 
-tab_eda, tab_sup, tab_unsup = st.tabs(["🔎 EDA (Exploração)", "🎯 Supervisionado — Regressão", "🧩 Não Supervisionado — Clusters"])
+tab_eda, tab_sup, tab_unsup = st.tabs([" EDA (Exploração)", " Supervisionado — Regressão", " Não Supervisionado — Clusters"])
 
 with tab_eda:
     st.subheader("Distribuições e Correlações")
