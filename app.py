@@ -12,151 +12,224 @@ from sklearn.inspection import permutation_importance
 from sklearn.cluster import KMeans
 import plotly.express as px
 
-st.set_page_config(page_title="ML em Saúde — Diabetes (sklearn)", layout="wide")
+st.set_page_config(page_title="Painel Clínico de Machine Learning em Saúde", layout="wide")
 
-st.sidebar.title(" Configurações")
-dataset_choice = st.sidebar.selectbox("Selecione o conjunto de dados", ["Diabetes (sklearn)", "Enviar CSV próprio"])
-test_size = st.sidebar.slider("Proporção de dados de teste", 0.1, 0.4, 0.2, 0.05)
-random_state = st.sidebar.number_input("Semente aleatória", min_value=0, value=42, step=1)
-cv_folds = st.sidebar.slider("Folds de validação cruzada", 3, 10, 5, 1)
-st.sidebar.markdown("---")
-st.sidebar.caption("Aplicação para apresentação acadêmica de ML aplicado à saúde.")
+st.markdown("""
+<style>
+body {background: #0f172a;}
+.main {background: #0f172a;}
+h1,h2,h3,h4,h5,h6 {color: #e2e8f0 !important; font-weight: 500;}
+p, label, span {color: #cbd5f5 !important;}
+.top-card {background: #111827; border: 1px solid rgba(148,163,184,.12); border-radius: .65rem; padding: 0.85rem 1rem;}
+.metric-title {font-size: .72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em;}
+.metric-value {font-size: 1.4rem; font-weight: 600; color: #e2e8f0; margin-top: .35rem;}
+</style>
+""", unsafe_allow_html=True)
 
-def carregar_diabetes():
-    data = load_diabetes()
-    X = pd.DataFrame(data.data, columns=data.feature_names)
-    y = pd.Series(data.target, name="progressao_doenca")
-    desc = "Conjunto de dados 'Diabetes' do scikit-learn com 10 preditores normalizados e alvo contínuo representando progressão da doença após 1 ano."
-    return X, y, desc
+st.sidebar.title("Configurações do Estudo")
+percentual_teste = st.sidebar.slider("Percentual para teste e validação", 0.1, 0.4, 0.2, 0.05)
+semente = st.sidebar.number_input("Semente (reprodutibilidade)", 0, 9999, 42, 1)
+kfold = st.sidebar.slider("Validação cruzada (k)", 3, 10, 5, 1)
+n_clusters = st.sidebar.slider("Número de grupos (não supervisionado)", 2, 10, 3, 1)
 
-def carregar_csv():
-    file = st.sidebar.file_uploader("Envie um arquivo CSV", type=["csv"])
-    if file is None:
-        return None, None, None
-    df = pd.read_csv(file)
-    st.session_state["_uploaded_df"] = df
-    return df, None, "CSV enviado pelo usuário."
+dataset = load_diabetes()
+X = pd.DataFrame(dataset.data, columns=dataset.feature_names)
+y = pd.Series(dataset.target, name="progresso_da_doenca")
 
-if dataset_choice == "Diabetes (sklearn)":
-    X, y, ds_desc = carregar_diabetes()
-    target_name = y.name
-else:
-    df, _, ds_desc = carregar_csv()
-    if df is not None:
-        cols = list(df.columns)
-        target_name = st.sidebar.selectbox("Selecione a coluna alvo (regressão)", cols, index=len(cols)-1 if len(cols)>0 else 0)
-        y = df[target_name] if target_name in df else None
-        X = df.drop(columns=[target_name]) if target_name in df else None
-    else:
-        X, y, target_name = None, None, None
+st.title("Painel Clínico — Machine Learning Aplicado à Saúde")
+st.write(
+    "Este painel demonstra como técnicas de aprendizado de máquina podem auxiliar equipes médicas a **analisar dados clínicos**, "
+    "**prever a progressão de uma doença** e **identificar grupos de pacientes com características semelhantes**. "
+    "O conjunto de dados utilizado representa informações clínicas de pacientes acompanhados por um ano."
+)
 
-st.title(" Machine Learning em Saúde — Demonstração Interativa")
-st.write("Aplicação interativa para **aprendizado supervisionado (regressão)** e **não supervisionado (agrupamento)** em dados de saúde.")
+c1, c2, c3, c4 = st.columns(4)
+c1.markdown(f'<div class="top-card"><div class="metric-title">Pacientes avaliados</div><div class="metric-value">{X.shape[0]}</div></div>', unsafe_allow_html=True)
+c2.markdown(f'<div class="top-card"><div class="metric-title">Variáveis clínicas</div><div class="metric-value">{X.shape[1]}</div></div>', unsafe_allow_html=True)
+c3.markdown(f'<div class="top-card"><div class="metric-title">Desfecho</div><div class="metric-value">progressão da doença</div></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="top-card"><div class="metric-title">Fonte</div><div class="metric-value">Scikit-learn</div></div>', unsafe_allow_html=True)
 
-if X is None or y is None:
-    st.info("Envie um CSV no menu lateral ou selecione o conjunto Diabetes para começar.")
-    st.stop()
+aba_analise, aba_sup, aba_nao_sup = st.tabs([
+    "1️ Análise dos Dados Clínicos",
+    "2️ Modelo Supervisionado (Previsão)",
+    "3️ Modelo Não Supervisionado (Segmentação)"
+])
 
-with st.expander(" Sobre o conjunto de dados", expanded=True):
-    st.write(ds_desc)
-    st.write(f"**Amostras:** {X.shape[0]} — **Atributos:** {X.shape[1]} — **Alvo:** `{target_name}`")
+with aba_analise:
+    st.subheader("Análise Exploratória dos Dados")
+    st.write(
+        "Nesta seção, é possível explorar as variáveis clínicas coletadas. Cada linha representa um paciente, "
+        "e cada coluna uma variável clínica ou demográfica. O desfecho é a progressão da doença após um período de acompanhamento."
+    )
+
     st.dataframe(X.head())
 
-tab_eda, tab_sup, tab_unsup = st.tabs([" EDA (Exploração)", " Supervisionado — Regressão", " Não Supervisionado — Clusters"])
+    st.subheader("Distribuição das Variáveis Clínicas")
+    var_hist = st.selectbox("Selecione uma variável para visualizar sua distribuição", X.columns, index=0)
+    fig_hist = px.histogram(X, x=var_hist, nbins=25, template="plotly_dark", title=f"Distribuição de {var_hist}")
+    st.plotly_chart(fig_hist, use_container_width=True)
 
-with tab_eda:
-    st.subheader("Distribuições e Correlações")
-    col1, col2 = st.columns(2)
-    with col1:
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        pca = PCA(n_components=2, random_state=random_state)
-        comp = pca.fit_transform(X_scaled)
-        df_pca = pd.DataFrame(comp, columns=["PC1", "PC2"])
-        df_pca[target_name] = y.values
-        fig = px.scatter(df_pca, x="PC1", y="PC2", color=target_name, title="Projeção PCA (colorido pelo alvo)")
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        corr = pd.concat([X, y], axis=1).corr(numeric_only=True)
-        fig_corr = px.imshow(corr, title="Matriz de Correlação", aspect="auto")
-        st.plotly_chart(fig_corr, use_container_width=True)
-    st.caption("Dica: avance para as abas de Modelos para comparar algoritmos e métricas.")
+    st.subheader("Relação Geral com o Desfecho Clínico")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    pca = PCA(n_components=2, random_state=semente)
+    componentes = pca.fit_transform(X_scaled)
+    df_pca = pd.DataFrame(componentes, columns=["Componente 1", "Componente 2"])
+    df_pca["progressao"] = y
+    fig_pca = px.scatter(
+        df_pca,
+        x="Componente 1",
+        y="Componente 2",
+        color="progressao",
+        template="plotly_dark",
+        title="Projeção dos pacientes (PCA) colorida pelo desfecho"
+    )
+    st.plotly_chart(fig_pca, use_container_width=True)
 
-with tab_sup:
-    st.subheader("Treinamento e Avaliação de Modelos")
-    model_name = st.selectbox("Modelo de Regressão", ["LinearRegression", "Ridge", "Lasso", "RandomForestRegressor"])
-    if model_name in ["Ridge", "Lasso"]:
-        alpha = st.slider("Parâmetro de regularização (alpha)", 0.0001, 10.0, 1.0, 0.1)
-    if model_name == "RandomForestRegressor":
-        n_estimators = st.slider("Número de árvores (n_estimators)", 100, 1000, 400, 50)
-        max_depth = st.slider("Profundidade máxima (0 = None)", 0, 30, 0, 1) or None
-        min_samples_split = st.slider("Mín. amostras para split", 2, 10, 2, 1)
-        min_samples_leaf = st.slider("Mín. amostras por folha", 1, 10, 1, 1)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
-    if model_name in ["LinearRegression", "Ridge", "Lasso"]:
+    corr = pd.concat([X, y], axis=1).corr(numeric_only=True)
+    fig_corr = px.imshow(
+        corr,
+        template="plotly_dark",
+        title="Correlação entre variáveis clínicas e o desfecho"
+    )
+    st.plotly_chart(fig_corr, use_container_width=True)
+
+with aba_sup:
+    st.subheader("Modelo Supervisionado — Previsão da Progressão da Doença")
+    st.write(
+        "Nesta etapa, o modelo é treinado para **prever a progressão da doença** com base nas variáveis clínicas dos pacientes. "
+        "Utiliza-se aprendizado supervisionado, em que o modelo conhece os resultados anteriores (desfechos) e aprende a estimá-los."
+    )
+
+    modelo_nome = st.selectbox(
+        "Selecione o algoritmo de regressão",
+        ["Regressão Linear", "Ridge", "Lasso", "Floresta Aleatória"],
+        index=3
+    )
+
+    if modelo_nome in ["Ridge", "Lasso"]:
+        alpha = st.slider("Intensidade de regularização (alpha)", 0.0001, 10.0, 1.0, 0.1)
+    if modelo_nome == "Floresta Aleatória":
+        n_estimators = st.slider("Número de árvores", 100, 1000, 400, 50)
+        max_depth = st.slider("Profundidade máxima (0 = automática)", 0, 30, 0, 1) or None
+        min_samples_split = st.slider("Mínimo para divisão de nó", 2, 10, 2, 1)
+        min_samples_leaf = st.slider("Mínimo de amostras por folha", 1, 10, 1, 1)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=percentual_teste, random_state=semente
+    )
+
+    if modelo_nome in ["Regressão Linear", "Ridge", "Lasso"]:
         scaler = StandardScaler()
         X_train_proc = scaler.fit_transform(X_train)
         X_test_proc = scaler.transform(X_test)
     else:
         X_train_proc, X_test_proc = X_train, X_test
-    if model_name == "LinearRegression":
-        model = LinearRegression()
-    elif model_name == "Ridge":
-        model = Ridge(alpha=alpha, random_state=random_state)
-    elif model_name == "Lasso":
-        model = Lasso(alpha=alpha, random_state=random_state, max_iter=10000)
+
+    if modelo_nome == "Regressão Linear":
+        modelo = LinearRegression()
+    elif modelo_nome == "Ridge":
+        modelo = Ridge(alpha=alpha, random_state=semente)
+    elif modelo_nome == "Lasso":
+        modelo = Lasso(alpha=alpha, random_state=semente, max_iter=10000)
     else:
-        model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf, random_state=random_state, n_jobs=-1)
-    model.fit(X_train_proc, y_train)
-    preds = model.predict(X_test_proc)
-    mae = mean_absolute_error(y_test, preds)
-    rmse = mean_squared_error(y_test, preds, squared=False)
-    r2 = r2_score(y_test, preds)
-    if model_name in ["LinearRegression", "Ridge", "Lasso"]:
-        cv_scores = cross_val_score(model, X_train_proc, y_train, cv=cv_folds, scoring="r2")
+        modelo = RandomForestRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            random_state=semente,
+            n_jobs=-1
+        )
+
+    modelo.fit(X_train_proc, y_train)
+    y_pred = modelo.predict(X_test_proc)
+
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    r2 = r2_score(y_test, y_pred)
+
+    if modelo_nome in ["Regressão Linear", "Ridge", "Lasso"]:
+        cv_scores = cross_val_score(modelo, X_train_proc, y_train, cv=kfold, scoring="r2")
     else:
-        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring="r2", n_jobs=-1)
+        cv_scores = cross_val_score(modelo, X_train, y_train, cv=kfold, scoring="r2", n_jobs=-1)
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("MAE (Erro Absoluto Médio)", f"{mae:.2f}")
-    c2.metric("RMSE (Raiz do Erro Quadrático)", f"{rmse:.2f}")
-    c3.metric("R² (teste)", f"{r2:.3f}")
-    c4.metric("R² (CV média)", f"{cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        df_res = pd.DataFrame({"Valor Real": y_test, "Predição": preds, "Erro": y_test - preds})
-        fig_pred = px.scatter(df_res, x="Valor Real", y="Predição", trendline="ols", title="Verdadeiro vs. Predito")
-        st.plotly_chart(fig_pred, use_container_width=True)
-    with col_b:
-        fig_res = px.histogram(df_res, x="Erro", nbins=30, title="Distribuição dos Erros")
-        st.plotly_chart(fig_res, use_container_width=True)
-    st.markdown("##### Importância dos Atributos / Coeficientes")
-    if hasattr(model, "feature_importances_"):
-        imp = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-    elif model_name in ["LinearRegression", "Ridge", "Lasso"]:
-        coef = np.abs(model.coef_)
+    c1.markdown(f'<div class="top-card"><div class="metric-title">MAE (Erro Médio Absoluto)</div><div class="metric-value">{mae:.2f}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="top-card"><div class="metric-title">RMSE (Raiz do Erro Quadrático)</div><div class="metric-value">{rmse:.2f}</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="top-card"><div class="metric-title">R² (teste)</div><div class="metric-value">{r2:.3f}</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="top-card"><div class="metric-title">R² (média k-fold)</div><div class="metric-value">{cv_scores.mean():.3f}</div></div>', unsafe_allow_html=True)
+
+    st.subheader("Análise de desempenho")
+    df_res = pd.DataFrame({"Valor Real": y_test, "Predição": y_pred, "Erro": y_test - y_pred})
+    fig_pred = px.scatter(
+        df_res,
+        x="Valor Real",
+        y="Predição",
+        template="plotly_dark",
+        title="Comparação entre valores reais e previstos"
+    )
+    st.plotly_chart(fig_pred, use_container_width=True)
+
+    fig_err = px.histogram(
+        df_res,
+        x="Erro",
+        nbins=30,
+        template="plotly_dark",
+        title="Distribuição dos erros de previsão"
+    )
+    st.plotly_chart(fig_err, use_container_width=True)
+
+    st.subheader("Variáveis mais relevantes no modelo")
+    if hasattr(modelo, "feature_importances_"):
+        imp = pd.Series(modelo.feature_importances_, index=X.columns).sort_values(ascending=False)
+    elif modelo_nome in ["Regressão Linear", "Ridge", "Lasso"]:
+        coef = np.abs(modelo.coef_)
         imp = pd.Series(coef, index=X.columns).sort_values(ascending=False)
     else:
-        perm = permutation_importance(model, X_test_proc, y_test, n_repeats=10, random_state=random_state, n_jobs=-1)
+        perm = permutation_importance(
+            modelo, X_test_proc, y_test, n_repeats=10, random_state=semente, n_jobs=-1
+        )
         imp = pd.Series(perm.importances_mean, index=X.columns).sort_values(ascending=False)
-    fig_imp = px.bar(imp.head(15), title="Top Atributos")
+
+    fig_imp = px.bar(
+        imp.head(12),
+        title="Principais variáveis clínicas utilizadas pelo modelo",
+        template="plotly_dark"
+    )
     st.plotly_chart(fig_imp, use_container_width=True)
 
-with tab_unsup:
-    st.subheader("Agrupamento (K-Means) e Projeção PCA")
-    n_clusters = st.slider("Número de grupos (k)", 2, 10, 3, 1)
+with aba_nao_sup:
+    st.subheader("Modelo Não Supervisionado — Agrupamento de Pacientes")
+    st.write(
+        "O aprendizado não supervisionado busca **identificar padrões e agrupar pacientes com características semelhantes**, "
+        "sem utilizar o desfecho clínico. Essa técnica auxilia na criação de perfis clínicos e pode apoiar decisões médicas personalizadas."
+    )
+
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    kmeans = KMeans(n_clusters=n_clusters, n_init="auto", random_state=random_state)
-    labels = kmeans.fit_predict(X_scaled)
-    sil = silhouette_score(X_scaled, labels)
-    st.metric("Silhouette Score", f"{sil:.3f}")
-    pca = PCA(n_components=2, random_state=random_state)
-    points = pca.fit_transform(X_scaled)
-    df_k = pd.DataFrame(points, columns=["PC1", "PC2"])
-    df_k["cluster"] = labels.astype(str)
-    fig_k = px.scatter(df_k, x="PC1", y="PC2", color="cluster", title="Clusters (PCA 2D)")
-    st.plotly_chart(fig_k, use_container_width=True)
-    prof = pd.DataFrame(X, copy=True)
-    prof["cluster"] = labels
-    prof_mean = prof.groupby("cluster").mean(numeric_only=True)
-    st.dataframe(prof_mean)
+    kmeans = KMeans(n_clusters=n_clusters, n_init="auto", random_state=semente)
+    grupos = kmeans.fit_predict(X_scaled)
+    sil = silhouette_score(X_scaled, grupos)
+
+    st.markdown(f"**Índice de coerência do agrupamento (Silhouette):** {sil:.3f}")
+
+    pca_seg = PCA(n_components=2, random_state=semente)
+    pts = pca_seg.fit_transform(X_scaled)
+    df_seg = pd.DataFrame(pts, columns=["Componente 1", "Componente 2"])
+    df_seg["Grupo"] = grupos.astype(str)
+    fig_seg = px.scatter(
+        df_seg,
+        x="Componente 1",
+        y="Componente 2",
+        color="Grupo",
+        template="plotly_dark",
+        title="Pacientes agrupados por semelhança clínica (PCA 2D)"
+    )
+    st.plotly_chart(fig_seg, use_container_width=True)
+
+    st.write("**Perfil médio de cada grupo identificado:**")
+    df_perf = pd.DataFrame(X, copy=True)
+    df_perf["grupo"] = grupos
+    medias = df_perf.groupby("grupo").mean(numeric_only=True).round(2)
+    st.dataframe(medias)
